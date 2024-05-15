@@ -32,27 +32,31 @@ class Evaporation:
         return self._evaporation_rate_table
 
 
-# Temporary function prior to implementation with IX.
-def timestepper(start_date=date(2024, 1, 1)):
-    current_date = start_date
-    while True:
-        yield current_date
-        days_in_month = calendar.monthrange(current_date.year, current_date.month)[1]
-        current_date += timedelta(days=days_in_month)
+class TimeObject:
+    def __init__(self):
+        self.current_time = date(2024, 1, 1)
+        self.time_gen = self.timestepper()
 
+    # Temporary function prior to implementation with IX.
+    def timestepper(self):
+        while True:
+            days_in_month = calendar.monthrange(
+                self.current_time.year, self.current_time.month
+            )[1]
+            self.current_time += timedelta(days=days_in_month)
+            yield self.current_time
 
-# Temporary generator prior to implementation with IX
-current_date = timestepper()
-
-
-# Replace implementation to get IX date.
-def get_current_time():
-    return next(current_date)
+    # Replace implementation to get IX date.
+    def get_current_time(self):
+        self.current_time = next(self.time_gen)
+        return self.current_time
 
 
 @dataclass
 class Timeseries:
     record: list[dict[str : Optional[float]]] = field(default_factory=list)
+    time_obj = TimeObject()
+    # time_gen = time_obj.timestepper()
 
     def __repr__(self) -> str:
         number = len(self.record)
@@ -63,7 +67,7 @@ class Timeseries:
         return len(self.record)
 
     def add_record(self, **kwargs) -> None:
-        current_time = get_current_time()
+        current_time = self.time_obj.get_current_time()
         new_record = {"timestamp": current_time}
         if self.record:
             last_record = self.record[-1]
@@ -170,15 +174,10 @@ class PlantPond(EvaporationPond):
 
 south_pond = PlantPond(level=3, capacity=9000)
 north_pond = PlantPond(volume=100, capacity=9000)
-north_pond.volume = 200
-north_pond.volume = 300
 north_pond.volume = 400
 north_pond.volume += 400
-print(current_date)
 south_pond.level = 4
-print(current_date)
-south_pond.level = 5
-south_pond.level += 5
+
 
 print(north_pond.time_series.record)
 print(south_pond.time_series.record)
