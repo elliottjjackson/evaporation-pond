@@ -48,7 +48,7 @@ class TimeObject:
         if self.__initialised:
             return
         self.current_time = date
-        self.time_gen = self.timestepper()
+        self.timestep = self.timestepper()
         self.__initialised = True
 
     # Generator that timesteps the date.
@@ -62,7 +62,7 @@ class TimeObject:
 
     # Method to progress the TimeObject timestep by one unit using the generator.
     def progress_time(self):
-        self.current_time = next(self.time_gen)
+        self.current_time = next(self.timestep)
         return self.current_time
 
 
@@ -189,28 +189,34 @@ class PlantPond(EvaporationPond):
         return volume
 
 
-time = TimeObject()
+if __name__ == "__main__":
 
-south_pond = PlantPond(level=3, capacity=9000)
-north_pond = PlantPond(volume=100, capacity=9000)
-north_pond.volume = 400
-north_pond.volume += 400
-south_pond.level = 4
+    time = TimeObject()
 
-print(north_pond.time_series.record)
-print(south_pond.time_series.record)
+    south_pond = PlantPond(level=3, capacity=9000)
+    north_pond = PlantPond(volume=100, capacity=9000)
+    north_pond.volume = 400
+    north_pond.volume += 400
+    south_pond.level = 4
 
-time.progress_time()
+    print(north_pond.time_series.record)
+    print(south_pond.time_series.record)
 
-north_pond.volume += 400
-south_pond.level += 2
+    time.progress_time()
 
-print(north_pond.time_series.record)
-print(south_pond.time_series.record)
+    north_pond.volume += 400
+    south_pond.level += 2
 
-evaporation = Evaporation()
+    print(north_pond.time_series.record)
+    print(south_pond.time_series.record)
+
+    evaporation = Evaporation()
 
 
+#############################
+# TO BE IMPLEMENTED
+# Pond allocation strategies
+#############################
 # class Container:
 #     def __init__(self, capacity):
 #         self.capacity = capacity
