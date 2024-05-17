@@ -1,9 +1,9 @@
 from abc import abstractmethod, ABC
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, Generator
+from typing import Optional, Tuple, Iterator
 import calendar
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 
 # https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://library.dpird.wa.gov.au/cgi/viewcontent.cgi%3Farticle%3D1058%26context%3Drmtr&ved=2ahUKEwjolN2SooWGAxXXR2wGHdTzBy8QFnoECBIQAQ&usg=AOvVaw1sRlfWhdNltfpyeWGYx1Jf
@@ -32,13 +32,27 @@ class Evaporation:
         return self._evaporation_rate_table
 
 
+# Singleton class used prior to the implementation of IX to get_current_time method.
 class TimeObject:
-    def __init__(self):
-        self.current_time = date(2024, 1, 1)
-        self.time_gen = self.timestepper()
+    _instance = None
 
-    # Temporary function prior to implementation with IX.
-    def timestepper(self):
+    # Singleton: ensures only one instance of this class is created.
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(TimeObject, cls).__new__(cls)
+            cls._instance.__initialised = False
+        return cls._instance
+
+    # __init__ only runs once if the class has not been initialised.
+    def __init__(self, date: datetime = date(2024, 1, 1)):
+        if self.__initialised:
+            return
+        self.current_time = date
+        self.time_gen = self.timestepper()
+        self.__initialised = True
+
+    # Generator that timesteps the date.
+    def timestepper(self) -> Iterator[datetime]:
         while True:
             days_in_month = calendar.monthrange(
                 self.current_time.year, self.current_time.month
@@ -46,17 +60,20 @@ class TimeObject:
             self.current_time += timedelta(days=days_in_month)
             yield self.current_time
 
-    # Replace implementation to get IX date.
-    def get_current_time(self):
+    # Method to progress the TimeObject timestep by one unit using the generator.
+    def progress_time(self):
         self.current_time = next(self.time_gen)
         return self.current_time
+
+
+def get_current_time():
+    return TimeObject().current_time
 
 
 @dataclass
 class Timeseries:
     record: list[dict[str : Optional[float]]] = field(default_factory=list)
     time_obj = TimeObject()
-    # time_gen = time_obj.timestepper()
 
     def __repr__(self) -> str:
         number = len(self.record)
@@ -67,7 +84,7 @@ class Timeseries:
         return len(self.record)
 
     def add_record(self, **kwargs) -> None:
-        current_time = self.time_obj.get_current_time()
+        current_time = get_current_time()
         new_record = {"timestamp": current_time}
         if self.record:
             last_record = self.record[-1]
@@ -118,7 +135,7 @@ class EvaporationPond(Mapping):
     def __len__(self) -> int:
         return len(self.__dict__)
 
-    def __iter__(self) -> Generator[Tuple[str, Optional[float]], None, None]:
+    def __iter__(self) -> Iterator[Tuple[str, Optional[float]]]:
         for key, value in self.__dict__.items():
             yield (key, value)
 
@@ -172,12 +189,21 @@ class PlantPond(EvaporationPond):
         return volume
 
 
+time = TimeObject()
+
 south_pond = PlantPond(level=3, capacity=9000)
 north_pond = PlantPond(volume=100, capacity=9000)
 north_pond.volume = 400
 north_pond.volume += 400
 south_pond.level = 4
 
+print(north_pond.time_series.record)
+print(south_pond.time_series.record)
+
+time.progress_time()
+
+north_pond.volume += 400
+south_pond.level += 2
 
 print(north_pond.time_series.record)
 print(south_pond.time_series.record)
