@@ -28,8 +28,10 @@ class Evaporation:
         }
 
     @property
-    def rate(self):
-        return self._evaporation_rate_table
+    def rate(self) -> float:
+        month = get_current_month()[:3].lower()
+        rate = self._evaporation_rate_table[month]
+        return rate
 
 
 # Singleton class used prior to the implementation of IX to get_current_time method.
@@ -61,13 +63,21 @@ class TimeObject:
             yield self.current_time
 
     # Method to progress the TimeObject timestep by one unit using the generator.
-    def progress_time(self):
+    def progress_time(self) -> datetime:
         self.current_time = next(self.timestep)
         return self.current_time
 
+    @property
+    def month(self) -> str:
+        return self.current_time.strftime("%B")
 
-def get_current_time():
+
+def get_current_time() -> datetime:
     return TimeObject().current_time
+
+
+def get_current_month() -> str:
+    return TimeObject().month
 
 
 @dataclass
@@ -195,6 +205,9 @@ if __name__ == "__main__":
 
     south_pond = PlantPond(level=3, capacity=9000)
     north_pond = PlantPond(volume=100, capacity=9000)
+
+    time.progress_time()
+
     north_pond.volume = 400
     north_pond.volume += 400
     south_pond.level = 4
@@ -211,6 +224,8 @@ if __name__ == "__main__":
     print(south_pond.time_series.record)
 
     evaporation = Evaporation()
+
+    print(evaporation.rate)
 
 
 #############################
