@@ -9,8 +9,7 @@ from datetime import date, timedelta, datetime
 # https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://library.dpird.wa.gov.au/cgi/viewcontent.cgi%3Farticle%3D1058%26context%3Drmtr&ved=2ahUKEwjolN2SooWGAxXXR2wGHdTzBy8QFnoECBIQAQ&usg=AOvVaw1sRlfWhdNltfpyeWGYx1Jf
 @dataclass
 class Evaporation:
-    # TO BE IMPLEMENTED
-    # Find a way to pass the current date and extract the month to get the correct rate.
+    # Mt Magnet evaporation rate data
     def __init__(self):
         self._evaporation_rate_table: dict[str:float] = {
             "jan": 519,
@@ -31,6 +30,33 @@ class Evaporation:
     def rate(self) -> float:
         month = get_current_month()[:3].lower()
         rate = self._evaporation_rate_table[month]
+        return rate
+
+
+# http://www.bom.gov.au/jsp/ncc/cdio/cvg/av?p_stn_num=008051&p_prim_element_index=18&p_display_type=statGraph&period_of_avg=ALL&normals_years=allYearOfData&staticPage=
+@dataclass
+class Rainfall:
+    # Geraldton airport 2014
+    def __init__(self):
+        self._rainfall_depth_table: dict[str:float] = {
+            "jan": 5.7,
+            "feb": 11.1,
+            "mar": 15.9,
+            "apr": 23.8,
+            "may": 69.5,
+            "jun": 97.2,
+            "jul": 91.3,
+            "aug": 64.7,
+            "sep": 32.0,
+            "oct": 19.6,
+            "nov": 9.1,
+            "dec": 5.3,
+        }
+
+    @property
+    def depth(self) -> float:
+        month = get_current_month()[:3].lower()
+        rate = self._rainfall_depth_table[month]
         return rate
 
 
@@ -117,6 +143,7 @@ class EvaporationPond(Mapping):
     level: Optional[float] = None
     volume: Optional[float] = None
     capacity: float = float("inf")
+    max_level: float = (float("inf"),)
     time_series: Timeseries = field(default_factory=Timeseries)
 
     def __init__(
@@ -128,6 +155,7 @@ class EvaporationPond(Mapping):
         # __init__ required to avoid level and volume setter recursion and to allow for
         # use of private and public variables.
         self.capacity = capacity
+        self.max_level = self.calculate_level(self.capacity)
         self.time_series = Timeseries()
         if level is not None and volume is not None:
             raise TypeError("Must specify either height, volume or nothing.")
@@ -158,9 +186,16 @@ class EvaporationPond(Mapping):
         pass
 
     def _update_record(self):
-        record_dict = {
-            key: value for key, value in self.__dict__.items() if key != "time_series"
-        }
+        # record_dict = {
+        #     key: value for key, value in self.__dict__.items() if key != "time_series"
+        # }
+        record_dict = {}
+        for key, value in self.__dict__.items():
+            if key != "time_series":
+                if key.startswith("_"):
+                    record_dict[key[1:]] = value
+                else:
+                    record_dict[key] = value
         # Implement a way to replace the private fields with the public ones.
         self.time_series.add_record(**record_dict)
 
@@ -224,8 +259,10 @@ if __name__ == "__main__":
     print(south_pond.time_series.record)
 
     evaporation = Evaporation()
+    rainfall = Rainfall()
 
     print(evaporation.rate)
+    print(rainfall.depth)
 
 
 #############################
