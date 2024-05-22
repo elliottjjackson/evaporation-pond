@@ -143,17 +143,16 @@ class EvaporationPond(Mapping):
     level: Optional[float] = None
     volume: Optional[float] = None
     capacity: float = float("inf")
-    max_level: float = (float("inf"),)
+    max_level: float = float("inf")
     time_series: Timeseries = field(default_factory=Timeseries)
 
+    # __init__ required to avoid level and volume setter recursion.
     def __init__(
         self,
         level: Optional[float] = None,
         volume: Optional[float] = None,
         capacity: float = float("inf"),
     ):
-        # __init__ required to avoid level and volume setter recursion and to allow for
-        # use of private and public variables.
         self.capacity = capacity
         self.max_level = self.calculate_level(self.capacity)
         self.time_series = Timeseries()
@@ -234,12 +233,51 @@ class PlantPond(EvaporationPond):
         return volume
 
 
+class AllocationStrategy(ABC):
+    @abstractmethod
+    def allocate(self, volume: float, ponds: list[EvaporationPond]) -> None:
+        pass
+
+
+class EvenDistributionStrategy(AllocationStrategy):
+    def allocate(self, volume: float, ponds: list[EvaporationPond]) -> None:
+        while volume > 0 and any(c.capacity > c.volume for c in ponds):
+            for container in ponds:
+                if container.capacity > container.volume:
+                    volume = container.fill(volume)
+                    if volume == 0:
+                        break
+
+
+class FillFirstStrategy(AllocationStrategy):
+    def allocate(self, volume: float, ponds: list[EvaporationPond]) -> None:
+        for container in ponds:
+            volume = container.fill(volume)
+            if volume == 0:
+                break
+
+
+class PondAllocator:
+    def __init__(self, strategy: AllocationStrategy):
+        self.strategy = strategy
+        self.ponds = []
+
+    def add_container(self, capacity):
+        self.ponds.append(EvaporationPond(capacity))
+
+    def distribute(self, volume):
+        self.strategy.allocate(volume, self.ponds)
+
+    def set_strategy(self, strategy: AllocationStrategy):
+        self.strategy = strategy
+
+
 if __name__ == "__main__":
 
     time = TimeObject()
 
-    south_pond = PlantPond(level=3, capacity=9000)
-    north_pond = PlantPond(volume=100, capacity=9000)
+    south_pond = PlantPond(level=3)
+    north_pond = PlantPond(volume=100)
 
     time.progress_time()
 
@@ -252,8 +290,8 @@ if __name__ == "__main__":
 
     time.progress_time()
 
-    north_pond.volume += 400
-    south_pond.level += 2
+    north_pond.volume += 400000
+    south_pond.level += 200
 
     print(north_pond.time_series.record)
     print(south_pond.time_series.record)
@@ -279,42 +317,6 @@ if __name__ == "__main__":
 #         volume_to_add = min(available_capacity, volume)
 #         self.volume += volume_to_add
 #         return volume - volume_to_add
-
-# class AllocationStrategy(ABC):
-#     @abstractmethod
-#     def allocate(self, volume: float, containers: List[Container]) -> None:
-#         pass
-
-# class EvenDistributionStrategy(AllocationStrategy):
-#     def allocate(self, volume: float, containers: List[Container]) -> None:
-#         while volume > 0 and any(c.capacity > c.volume for c in containers):
-#             for container in containers:
-#                 if container.capacity > container.volume:
-#                     volume = container.fill(volume)
-#                     if volume == 0:
-#                         break
-
-# class FillFirstStrategy(AllocationStrategy):
-#     def allocate(self, volume: float, containers: List[Container]) -> None:
-#         for container in containers:
-#             volume = container.fill(volume)
-#             if volume == 0:
-#                 break
-
-# class ContainerAllocator:
-#     def __init__(self, strategy: AllocationStrategy):
-#         self.strategy = strategy
-#         self.containers = []
-
-#     def add_container(self, capacity):
-#         self.containers.append(Container(capacity))
-
-#     def distribute(self, volume):
-#         self.strategy.allocate(volume, self.containers)
-
-#     def set_strategy(self, strategy: AllocationStrategy):
-#         self.strategy = strategy
-
 # # Example usage:
 # containers = ContainerAllocator(EvenDistributionStrategy())
 # containers.add_container(100)
