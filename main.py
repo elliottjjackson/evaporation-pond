@@ -270,6 +270,7 @@ class AllocationStrategy(ABC):
 
 
 class EvenDistributionStrategy(AllocationStrategy):
+    # FIXME: ZeroDivision on allocation_fill calc.
     def allocate(self, volume: float, ponds: list[EvaporationPond]) -> None:
         for pond in ponds:
             pond.level += self.weather_effect_level_change()
@@ -285,7 +286,10 @@ class EvenDistributionStrategy(AllocationStrategy):
                     (allocated_fill * ponds_left) + carry_over
                 ) / ponds_left
                 pond.volume = pond.capacity
-        # TODO Implement overflow calculation when unable to carry over.
+        if carry_over > 0:
+            allocated_overflow = carry_over / len(ponds)
+            for pond in ponds:
+                pond.overflow = allocated_overflow
 
 
 class FillFirstStrategy(AllocationStrategy):
@@ -301,8 +305,8 @@ class PondAllocator:
         self.strategy = strategy
         self.ponds = []
 
-    def add_container(self, capacity):
-        self.ponds.append(EvaporationPond(capacity))
+    def add_pond(self, pond: EvaporationPond) -> None:
+        self.ponds.append(pond)
 
     def distribute(self, volume):
         self.strategy.allocate(volume, self.ponds)
@@ -315,8 +319,15 @@ if __name__ == "__main__":
 
     time = TimeObject()
 
-    south_pond = PlantPond(level=3)
-    north_pond = PlantPond(volume=100)
+    south_pond = PlantPond(level=0.2, capacity=500)
+    north_pond = PlantPond(volume=100, capacity=500)
+    east_pond = PlantPond(volume=200, capacity=500)
+
+    containers = PondAllocator(EvenDistributionStrategy())
+    containers.add_pond(south_pond)
+    containers.add_pond(north_pond)
+    containers.add_pond(east_pond)
+    containers.distribute(1000)
 
     time.progress_time()
 
@@ -326,20 +337,6 @@ if __name__ == "__main__":
 
     print(north_pond.time_series.record)
     print(south_pond.time_series.record)
-
-    time.progress_time()
-
-    north_pond.volume += 400000
-    south_pond.level += 200
-    north_pond.overflow = 200
-    print(north_pond.time_series.record)
-    print(south_pond.time_series.record)
-
-    evaporation = Evaporation()
-    rainfall = Rainfall()
-
-    print(evaporation.rate)
-    print(rainfall.depth)
 
 
 #############################
