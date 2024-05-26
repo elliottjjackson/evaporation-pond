@@ -1,9 +1,10 @@
 from abc import abstractmethod, ABC
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, Iterator
+from typing import Any, Optional, Tuple, Iterator
 import calendar
 from datetime import date, timedelta, datetime
+from math import isclose
 
 
 # https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://library.dpird.wa.gov.au/cgi/viewcontent.cgi%3Farticle%3D1058%26context%3Drmtr&ved=2ahUKEwjolN2SooWGAxXXR2wGHdTzBy8QFnoECBIQAQ&usg=AOvVaw1sRlfWhdNltfpyeWGYx1Jf
@@ -119,7 +120,7 @@ class Timeseries:
     def __len__(self) -> int:
         return len(self.record)
 
-    def add_record(self, **kwargs) -> None:
+    def add_record(self, **kwargs: dict[str:Any]) -> None:
         current_time = get_current_time()
         new_record = {"timestamp": current_time}
         if self.record:
@@ -144,6 +145,7 @@ class EvaporationPond(Mapping):
     volume: Optional[float] = None
     capacity: float = float("inf")
     max_level: float = float("inf")
+    overflow: float = 0
     time_series: Timeseries = field(default_factory=Timeseries)
 
     # __init__ required to avoid level and volume setter recursion.
@@ -152,8 +154,10 @@ class EvaporationPond(Mapping):
         level: Optional[float] = None,
         volume: Optional[float] = None,
         capacity: float = float("inf"),
+        overflow: float = 0,
     ):
         self.capacity = capacity
+        self._overflow = overflow
         self.max_level = self.calculate_level(self.capacity)
         self.time_series = Timeseries()
         if level is not None and volume is not None:
@@ -184,10 +188,22 @@ class EvaporationPond(Mapping):
     def calculate_volume(self):
         pass
 
+    def is_overflowing(self, this_volume=None) -> bool:
+        if this_volume:
+            return this_volume > self.capacity
+        else:
+            return self._volume > self.capacity
+
+    def is_at_capacity(self, this_volume=None) -> bool:
+        if this_volume:
+            return isclose(this_volume, self.capacity)
+        else:
+            return isclose(self._volume, self.capacity)
+
+    def remaining_capacity(self) -> float:
+        return self.capacity - self._volume
+
     def _update_record(self):
-        # record_dict = {
-        #     key: value for key, value in self.__dict__.items() if key != "time_series"
-        # }
         record_dict = {}
         for key, value in self.__dict__.items():
             if key != "time_series":
@@ -195,8 +211,15 @@ class EvaporationPond(Mapping):
                     record_dict[key[1:]] = value
                 else:
                     record_dict[key] = value
-        # Implement a way to replace the private fields with the public ones.
         self.time_series.add_record(**record_dict)
+
+    @property
+    def overflow(self):
+        return self._overflow
+
+    @overflow.setter
+    def overflow(self, value):
+        self._overflow = value
 
     @property
     def level(self):
@@ -223,17 +246,24 @@ class EvaporationPond(Mapping):
 
 class PlantPond(EvaporationPond):
     def calculate_level(self, volume) -> Optional[float]:
+        # TODO Level calculation when the level is above max
         area = 200
         level = volume / area
         return level
 
     def calculate_volume(self, level) -> Optional[float]:
+        # TODO Volume calculation when the volume is above max
         area = 1000
         volume = level * area
         return volume
 
 
 class AllocationStrategy(ABC):
+    def weather_effect_level_change(self) -> float:
+        evaporation = Evaporation()
+        rainfall = Rainfall()
+        return evaporation.rate + rainfall.depth
+
     @abstractmethod
     def allocate(self, volume: float, ponds: list[EvaporationPond]) -> None:
         pass
@@ -241,12 +271,21 @@ class AllocationStrategy(ABC):
 
 class EvenDistributionStrategy(AllocationStrategy):
     def allocate(self, volume: float, ponds: list[EvaporationPond]) -> None:
-        while volume > 0 and any(c.capacity > c.volume for c in ponds):
-            for container in ponds:
-                if container.capacity > container.volume:
-                    volume = container.fill(volume)
-                    if volume == 0:
-                        break
+        for pond in ponds:
+            pond.level += self.weather_effect_level_change()
+        sorted_ponds = sorted(ponds, key=lambda pond: pond.remaining_capacity())
+        allocated_fill = volume / len(ponds)
+        for i, pond in enumerate(sorted_ponds):
+            ponds_left = len(ponds) - i - 1
+            if allocated_fill < pond.remaining_capacity():
+                pond.volume += allocated_fill
+            else:
+                carry_over = allocated_fill - pond.remaining_capacity()
+                allocated_fill = (
+                    (allocated_fill * ponds_left) + carry_over
+                ) / ponds_left
+                pond.volume = pond.capacity
+        # TODO Implement overflow calculation when unable to carry over.
 
 
 class FillFirstStrategy(AllocationStrategy):
@@ -292,7 +331,7 @@ if __name__ == "__main__":
 
     north_pond.volume += 400000
     south_pond.level += 200
-
+    north_pond.overflow = 200
     print(north_pond.time_series.record)
     print(south_pond.time_series.record)
 
