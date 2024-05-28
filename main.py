@@ -253,7 +253,7 @@ class PlantPond(EvaporationPond):
 
     def calculate_volume(self, level) -> Optional[float]:
         # TODO Volume calculation when the volume is above max
-        area = 1000
+        area = 200
         volume = level * area
         return volume
 
@@ -262,7 +262,7 @@ class AllocationStrategy(ABC):
     def weather_effect_level_change(self) -> float:
         evaporation = Evaporation()
         rainfall = Rainfall()
-        return evaporation.rate + rainfall.depth
+        return evaporation.rate / 1000 + rainfall.depth / 1000
 
     @abstractmethod
     def allocate(self, volume: float, ponds: list[EvaporationPond]) -> None:
@@ -276,16 +276,21 @@ class EvenDistributionStrategy(AllocationStrategy):
             pond.level += self.weather_effect_level_change()
         sorted_ponds = sorted(ponds, key=lambda pond: pond.remaining_capacity())
         allocated_fill = volume / len(ponds)
+        carry_over = 0
         for i, pond in enumerate(sorted_ponds):
             ponds_left = len(ponds) - i - 1
             if allocated_fill < pond.remaining_capacity():
                 pond.volume += allocated_fill
-            else:
+            elif ponds_left > 0:
                 carry_over = allocated_fill - pond.remaining_capacity()
                 allocated_fill = (
                     (allocated_fill * ponds_left) + carry_over
                 ) / ponds_left
                 pond.volume = pond.capacity
+            else:
+                carry_over = allocated_fill - pond.remaining_capacity()
+                pond.volume = pond.capacity
+
         if carry_over > 0:
             allocated_overflow = carry_over / len(ponds)
             for pond in ponds:
@@ -323,20 +328,21 @@ if __name__ == "__main__":
     north_pond = PlantPond(volume=100, capacity=500)
     east_pond = PlantPond(volume=200, capacity=500)
 
-    containers = PondAllocator(EvenDistributionStrategy())
-    containers.add_pond(south_pond)
-    containers.add_pond(north_pond)
-    containers.add_pond(east_pond)
-    containers.distribute(1000)
+    ponds = PondAllocator(EvenDistributionStrategy())
+    ponds.add_pond(south_pond)
+    ponds.add_pond(north_pond)
+    ponds.add_pond(east_pond)
+    ponds.distribute(10)
 
     time.progress_time()
 
-    north_pond.volume = 400
-    north_pond.volume += 400
-    south_pond.level = 4
+    ponds.distribute(10)
+
+    time.progress_time()
 
     print(north_pond.time_series.record)
     print(south_pond.time_series.record)
+    print(east_pond.time_series.record)
 
 
 #############################
