@@ -7,6 +7,11 @@ from datetime import date, timedelta, datetime
 from math import isclose
 
 
+@dataclass
+class WeatherData:
+    pass
+
+
 # https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://library.dpird.wa.gov.au/cgi/viewcontent.cgi%3Farticle%3D1058%26context%3Drmtr&ved=2ahUKEwjolN2SooWGAxXXR2wGHdTzBy8QFnoECBIQAQ&usg=AOvVaw1sRlfWhdNltfpyeWGYx1Jf
 @dataclass
 class Evaporation:
