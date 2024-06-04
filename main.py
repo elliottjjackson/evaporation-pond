@@ -1,5 +1,6 @@
 from abc import abstractmethod, ABC
 from collections.abc import Mapping
+import csv
 from dataclasses import dataclass, field
 from typing import Any, Optional, Tuple, Iterator
 import calendar
@@ -7,63 +8,123 @@ from datetime import date, timedelta, datetime
 from math import isclose
 
 
-@dataclass
-class WeatherData:
-    pass
-
-
 # https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://library.dpird.wa.gov.au/cgi/viewcontent.cgi%3Farticle%3D1058%26context%3Drmtr&ved=2ahUKEwjolN2SooWGAxXXR2wGHdTzBy8QFnoECBIQAQ&usg=AOvVaw1sRlfWhdNltfpyeWGYx1Jf
 @dataclass
 class Evaporation:
-    # Mt Magnet evaporation rate data
     def __init__(self):
-        self._evaporation_rate_table: dict[str:float] = {
-            "jan": 519,
-            "feb": 443,
-            "mar": 391,
-            "apr": 264,
-            "may": 179,
-            "jun": 116,
-            "jul": 119,
-            "aug": 157,
-            "sep": 204,
-            "oct": 323,
-            "nov": 383,
-            "dec": 477,
+        self.rate_table: dict[str:float] = {
+            "jan": 0,
+            "feb": 0,
+            "mar": 0,
+            "apr": 0,
+            "may": 0,
+            "jun": 0,
+            "jul": 0,
+            "aug": 0,
+            "sep": 0,
+            "oct": 0,
+            "nov": 0,
+            "dec": 0,
         }
 
     @property
     def rate(self) -> float:
         month = get_current_month()[:3].lower()
-        rate = self._evaporation_rate_table[month]
+        rate = self.rate_table[month]
         return rate
 
 
 # http://www.bom.gov.au/jsp/ncc/cdio/cvg/av?p_stn_num=008051&p_prim_element_index=18&p_display_type=statGraph&period_of_avg=ALL&normals_years=allYearOfData&staticPage=
 @dataclass
 class Rainfall:
-    # Geraldton airport 2014
     def __init__(self):
-        self._rainfall_depth_table: dict[str:float] = {
-            "jan": 5.7,
-            "feb": 11.1,
-            "mar": 15.9,
-            "apr": 23.8,
-            "may": 69.5,
-            "jun": 97.2,
-            "jul": 91.3,
-            "aug": 64.7,
-            "sep": 32.0,
-            "oct": 19.6,
-            "nov": 9.1,
-            "dec": 5.3,
+        self.depth_table: dict[str:float] = {
+            "jan": 0,
+            "feb": 0,
+            "mar": 0,
+            "apr": 0,
+            "may": 0,
+            "jun": 0,
+            "jul": 0,
+            "aug": 0,
+            "sep": 0,
+            "oct": 0,
+            "nov": 0,
+            "dec": 0,
         }
 
     @property
     def depth(self) -> float:
         month = get_current_month()[:3].lower()
-        rate = self._rainfall_depth_table[month]
+        rate = self.depth_table[month]
         return rate
+
+
+@dataclass
+class WeatherData:
+    def __init__(self):
+        self.evaporation = Evaporation()
+        self.rainfall = Rainfall()
+
+    def set_evaporation_table(self, file_path: str, header: int = 0) -> None:
+        evaporation_rate_table: dict[str:float] = self._get_weather_table(
+            file_path, header
+        )
+        if self._valid_rate_table(evaporation_rate_table):
+            self.evaporation.rate_table = evaporation_rate_table
+
+    def set_rainfall_table(self, file_path: str, header: int = 0) -> None:
+        rainfall_depth_table: dict[str:float] = self._get_weather_table(
+            file_path, header
+        )
+        if self._valid_rate_table(rainfall_depth_table):
+            self.rainfall.depth_table = rainfall_depth_table
+
+    def _get_weather_table(self, file_path: str, header: int = 0) -> dict[str:float]:
+        evaporation_rate_table = {}
+        with open(file_path, "r") as file:
+            reader = csv.reader(file)
+            if header:
+                for _ in range(header):
+                    next(reader)  # skip header row
+            for row in reader:
+                try:
+                    month, rate = row
+                except:
+                    raise ValueError(
+                        "CSV must only have two parameters per row: month and value."
+                    )
+                month = str(month)[:3].lower()  # Month string to 'mmm' format
+                evaporation_rate_table[month] = float(rate)
+        return evaporation_rate_table
+
+    def _valid_rate_table(self, rate_table: dict[str:float]) -> bool:
+        valid_month_set = set(
+            [
+                "jan",
+                "feb",
+                "mar",
+                "apr",
+                "may",
+                "jun",
+                "jul",
+                "aug",
+                "sep",
+                "oct",
+                "nov",
+                "dec",
+            ]
+        )
+        rate_table_month_set = set(rate_table.keys())
+        if len(rate_table_month_set) != len(valid_month_set):
+            raise ValueError("Data format requires 12 rows for each month.")
+        elif rate_table_month_set != valid_month_set:
+            raise ValueError(
+                "Rate table format must be month,rate where month is a string.\n"
+                "Use the 'header' parameter to set the number of header rows."
+            )
+        else:
+            return True
 
 
 # Singleton class used prior to the implementation of IX to get_current_time method.
@@ -265,9 +326,8 @@ class PlantPond(EvaporationPond):
 
 class AllocationStrategy(ABC):
     def weather_effect_level_change(self) -> float:
-        evaporation = Evaporation()
-        rainfall = Rainfall()
-        return evaporation.rate / 1000 + rainfall.depth / 1000
+        weather_data = WeatherData()
+        return weather_data.evaporation.rate / 1000 + weather_data.rainfall.depth / 1000
 
     @abstractmethod
     def allocate(self, volume: float, ponds: list[EvaporationPond]) -> None:
@@ -312,6 +372,7 @@ class FillFirstStrategy(AllocationStrategy):
 
 class PondAllocator:
     def __init__(self, strategy: AllocationStrategy):
+        self.weather_data = WeatherData()
         self.strategy = strategy
         self.ponds = []
 
@@ -324,16 +385,26 @@ class PondAllocator:
     def set_strategy(self, strategy: AllocationStrategy):
         self.strategy = strategy
 
+    def set_weather_data(self, weather_data: WeatherData):
+        self.weather_data = weather_data
+
 
 if __name__ == "__main__":
 
     time = TimeObject()
+    weather_data = WeatherData()
+    # FIXME script should have no rainfall or evaporation effects if these two lines
+    # are removed. Script should apply rainfall and evap if they are included.
+    # Currently, script produces the same results regardless.
+    weather_data.set_evaporation_table("evaporation.csv", header=1)
+    weather_data.set_rainfall_table("rainfall.csv", header=1)
 
     south_pond = PlantPond(level=0.2, capacity=500)
     north_pond = PlantPond(volume=100, capacity=500)
     east_pond = PlantPond(volume=200, capacity=500)
 
     ponds = PondAllocator(EvenDistributionStrategy())
+    ponds.set_weather_data(weather_data)
     ponds.add_pond(south_pond)
     ponds.add_pond(north_pond)
     ponds.add_pond(east_pond)
