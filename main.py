@@ -3,6 +3,8 @@ from collections.abc import Mapping
 import csv
 from dataclasses import dataclass, field
 from typing import Any, Optional, Tuple, Iterator
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import calendar
 from datetime import date, timedelta, datetime
 from math import isclose
@@ -414,6 +416,36 @@ if __name__ == "__main__":
     ponds.distribute(10)
 
     time.progress_time()
+
+    records = [
+        north_pond.time_series.record,
+        south_pond.time_series.record,
+        east_pond.time_series.record,
+    ]
+
+    # Plotting
+    plt.figure(figsize=(10, 5))  # Set the figure size
+
+    # Loop through each dataset and plot
+    for i, data in enumerate(records, start=1):
+        timestamps = [entry["timestamp"] for entry in data]
+        volumes = [entry["volume"] for entry in data]
+        plt.plot(timestamps, volumes, marker="o", label=f"Dataset {i}")
+
+    # Formatting the plot
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    plt.gca().xaxis.set_major_locator(mdates.MonthLocator())
+    plt.gcf().autofmt_xdate()  # Rotation
+
+    plt.title("Volume over Time")
+    plt.xlabel("Timestamp")
+    plt.ylabel("Volume")
+    plt.legend()  # Add a legend
+    plt.grid(True)
+    plt.tight_layout()
+
+    # Show the plot
+    plt.show()
 
     print(north_pond.time_series.record)
     print(south_pond.time_series.record)
