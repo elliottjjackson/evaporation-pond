@@ -326,7 +326,6 @@ class PlantPond(EvaporationPond):
 
 class AllocationStrategy(ABC):
     def weather_effect_level_change(self) -> float:
-        weather_data = WeatherData()
         return weather_data.evaporation.rate / 1000 + weather_data.rainfall.depth / 1000
 
     @abstractmethod
@@ -336,7 +335,9 @@ class AllocationStrategy(ABC):
 
 class EvenDistributionStrategy(AllocationStrategy):
     # FIXME: ZeroDivision on allocation_fill calc.
-    def allocate(self, volume: float, ponds: list[EvaporationPond]) -> None:
+    def allocate(
+        self, volume: float, ponds: list[EvaporationPond], weather_data: WeatherData
+    ) -> None:
         for pond in ponds:
             pond.level += self.weather_effect_level_change()
         sorted_ponds = sorted(ponds, key=lambda pond: pond.remaining_capacity())
@@ -380,7 +381,7 @@ class PondAllocator:
         self.ponds.append(pond)
 
     def distribute(self, volume):
-        self.strategy.allocate(volume, self.ponds)
+        self.strategy.allocate(volume, self.ponds, self.weather_data)
 
     def set_strategy(self, strategy: AllocationStrategy):
         self.strategy = strategy
@@ -392,10 +393,8 @@ class PondAllocator:
 if __name__ == "__main__":
 
     time = TimeObject()
+
     weather_data = WeatherData()
-    # FIXME script should have no rainfall or evaporation effects if these two lines
-    # are removed. Script should apply rainfall and evap if they are included.
-    # Currently, script produces the same results regardless.
     weather_data.set_evaporation_table("evaporation.csv", header=1)
     weather_data.set_rainfall_table("rainfall.csv", header=1)
 
