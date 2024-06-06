@@ -8,6 +8,7 @@ import matplotlib.dates as mdates
 import calendar
 from datetime import date, timedelta, datetime
 from math import isclose
+from operator import methodcaller
 
 
 # https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://library.dpird.wa.gov.au/cgi/viewcontent.cgi%3Farticle%3D1058%26context%3Drmtr&ved=2ahUKEwjolN2SooWGAxXXR2wGHdTzBy8QFnoECBIQAQ&usg=AOvVaw1sRlfWhdNltfpyeWGYx1Jf
@@ -336,41 +337,51 @@ class AllocationStrategy(ABC):
 
 
 class EvenDistributionStrategy(AllocationStrategy):
-    # FIXME: ZeroDivision on allocation_fill calc.
     def allocate(
         self, volume: float, ponds: list[EvaporationPond], weather_data: WeatherData
     ) -> None:
         for pond in ponds:
             pond.level += self.weather_effect_level_change()
-        sorted_ponds = sorted(ponds, key=lambda pond: pond.remaining_capacity())
+        sorted_ponds = sorted(ponds, key=methodcaller("remaining_capacity"))
         allocated_fill = volume / len(ponds)
         carry_over = 0
         for i, pond in enumerate(sorted_ponds):
             ponds_left = len(ponds) - i - 1
-            if allocated_fill < pond.remaining_capacity():
+            remaining_capacity = pond.remaining_capacity()
+            if allocated_fill < remaining_capacity:
                 pond.volume += allocated_fill
             elif ponds_left > 0:
-                carry_over = allocated_fill - pond.remaining_capacity()
+                carry_over = allocated_fill - remaining_capacity
                 allocated_fill = (
                     (allocated_fill * ponds_left) + carry_over
                 ) / ponds_left
                 pond.volume = pond.capacity
             else:
-                carry_over = allocated_fill - pond.remaining_capacity()
+                carry_over = allocated_fill - remaining_capacity
                 pond.volume = pond.capacity
 
         if carry_over > 0:
             allocated_overflow = carry_over / len(ponds)
-            for pond in ponds:
-                pond.overflow = allocated_overflow
+        for pond in ponds:
+            pond.level += self.weather_effect_level_change()
 
 
 class FillFirstStrategy(AllocationStrategy):
-    def allocate(self, volume: float, ponds: list[EvaporationPond]) -> None:
-        for container in ponds:
-            volume = container.fill(volume)
-            if volume == 0:
-                break
+    def allocate(
+        self, volume: float, ponds: list[EvaporationPond], weather_data: WeatherData
+    ) -> None:
+        for pond in ponds:
+            pond.level += self.weather_effect_level_change()
+        sorted_ponds = sorted(
+            ponds, key=methodcaller("remaining_capacity"), reverse=True
+        )
+        carry_over = 0
+        for i, pond in enumerate(sorted_ponds):
+            remaining_capacity = pond.remaining_capacity()
+            if volume < remaining_capacity:
+                pass
+            elif volume >= remaining_capacity:
+                pass
 
 
 class PondAllocator:
