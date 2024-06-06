@@ -397,25 +397,23 @@ if __name__ == "__main__":
     time = TimeObject()
 
     weather_data = WeatherData()
-    weather_data.set_evaporation_table("evaporation.csv", header=1)
-    weather_data.set_rainfall_table("rainfall.csv", header=1)
+    # weather_data.set_evaporation_table("evaporation.csv", header=1)
+    # weather_data.set_rainfall_table("rainfall.csv", header=1)
 
-    south_pond = PlantPond(level=0.2, capacity=500)
-    north_pond = PlantPond(volume=100, capacity=500)
-    east_pond = PlantPond(volume=200, capacity=500)
+    south_pond = PlantPond(level=0.2, capacity=2000)
+    north_pond = PlantPond(volume=1000, capacity=2000)
+    east_pond = PlantPond(volume=1700, capacity=2000)
 
     ponds = PondAllocator(EvenDistributionStrategy())
     ponds.set_weather_data(weather_data)
     ponds.add_pond(south_pond)
     ponds.add_pond(north_pond)
     ponds.add_pond(east_pond)
-    ponds.distribute(10)
-
     time.progress_time()
 
-    ponds.distribute(10)
-
-    time.progress_time()
+    for _ in range(20):
+        ponds.distribute(200)
+        time.progress_time()
 
     records = [
         north_pond.time_series.record,
@@ -427,10 +425,12 @@ if __name__ == "__main__":
     plt.figure(figsize=(10, 5))  # Set the figure size
 
     # Loop through each dataset and plot
-    for i, data in enumerate(records, start=1):
+    for i, data in enumerate(records):
         timestamps = [entry["timestamp"] for entry in data]
         volumes = [entry["volume"] for entry in data]
-        plt.plot(timestamps, volumes, marker="o", label=f"Dataset {i}")
+
+        names = ["North", "South", "East"]
+        plt.plot(timestamps, volumes, marker="o", label=f"{names[i]} Pond")
 
     # Formatting the plot
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
@@ -446,10 +446,6 @@ if __name__ == "__main__":
 
     # Show the plot
     plt.show()
-
-    print(north_pond.time_series.record)
-    print(south_pond.time_series.record)
-    print(east_pond.time_series.record)
 
 
 #############################
