@@ -11,7 +11,7 @@ from math import isclose
 from operator import methodcaller
 
 
-# https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://library.dpird.wa.gov.au/cgi/viewcontent.cgi%3Farticle%3D1058%26context%3Drmtr&ved=2ahUKEwjolN2SooWGAxXXR2wGHdTzBy8QFnoECBIQAQ&usg=AOvVaw1sRlfWhdNltfpyeWGYx1Jf
+# https://library.dpird.wa.gov.au/cgi/viewcontent.cgi?article=1058&context=rmtr
 @dataclass
 class Evaporation:
     def __init__(self):
@@ -314,12 +314,23 @@ class EvaporationPond(Mapping):
 
 
 class PlantPond(EvaporationPond):
+    def enforce_positive_return(func):
+        def wrapper(*args, **kwargs):
+            result = func(*args, **kwargs)
+            if result < 0:
+                return 0
+            return result
+
+        return wrapper
+
+    @enforce_positive_return
     def calculate_level(self, volume) -> Optional[float]:
         # TODO Level calculation when the level is above max
         area = 200
         level = volume / area
         return level
 
+    @enforce_positive_return
     def calculate_volume(self, level) -> Optional[float]:
         # TODO Volume calculation when the volume is above max
         area = 200
@@ -329,7 +340,7 @@ class PlantPond(EvaporationPond):
 
 class AllocationStrategy(ABC):
     def weather_effect_level_change(self) -> float:
-        return weather_data.evaporation.rate / 1000 + weather_data.rainfall.depth / 1000
+        return weather_data.rainfall.depth / 1000 - weather_data.evaporation.rate / 1000
 
     @abstractmethod
     def allocate(self, volume: float, ponds: list[EvaporationPond]) -> None:
@@ -362,8 +373,6 @@ class EvenDistributionStrategy(AllocationStrategy):
 
         if carry_over > 0:
             allocated_overflow = carry_over / len(ponds)
-        for pond in ponds:
-            pond.level += self.weather_effect_level_change()
 
 
 class FillFirstStrategy(AllocationStrategy):
@@ -378,10 +387,15 @@ class FillFirstStrategy(AllocationStrategy):
         carry_over = 0
         for i, pond in enumerate(sorted_ponds):
             remaining_capacity = pond.remaining_capacity()
+            allocated_fill = volume
             if volume < remaining_capacity:
-                pass
+                pond.volume += allocated_fill
             elif volume >= remaining_capacity:
-                pass
+                carry_over = allocated_fill - remaining_capacity
+                pond.volume = pond.capacity
+
+        if carry_over > 0:
+            allocated_overflow = carry_over / len(ponds)
 
 
 class PondAllocator:
@@ -408,12 +422,12 @@ if __name__ == "__main__":
     time = TimeObject()
 
     weather_data = WeatherData()
-    # weather_data.set_evaporation_table("evaporation.csv", header=1)
-    # weather_data.set_rainfall_table("rainfall.csv", header=1)
+    weather_data.set_evaporation_table("evaporation.csv", header=1)
+    weather_data.set_rainfall_table("rainfall.csv", header=1)
 
-    south_pond = PlantPond(level=0.2, capacity=2000)
-    north_pond = PlantPond(volume=1000, capacity=2000)
-    east_pond = PlantPond(volume=1700, capacity=2000)
+    south_pond = PlantPond(level=0.2)
+    north_pond = PlantPond(volume=1000)
+    east_pond = PlantPond(volume=1700)
 
     ponds = PondAllocator(EvenDistributionStrategy())
     ponds.set_weather_data(weather_data)
@@ -422,8 +436,8 @@ if __name__ == "__main__":
     ponds.add_pond(east_pond)
     time.progress_time()
 
-    for _ in range(20):
-        ponds.distribute(200)
+    for _ in range(200):
+        ponds.distribute(0)
         time.progress_time()
 
     records = [
