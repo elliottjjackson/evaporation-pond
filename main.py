@@ -351,12 +351,11 @@ class EvenDistributionStrategy(AllocationStrategy):
     def allocate(
         self, volume: float, ponds: list[EvaporationPond], weather_data: WeatherData
     ) -> None:
-        for pond in ponds:
-            pond.level += self.weather_effect_level_change()
         sorted_ponds = sorted(ponds, key=methodcaller("remaining_capacity"))
         allocated_fill = volume / len(ponds)
         carry_over = 0
         for i, pond in enumerate(sorted_ponds):
+            pond.level += self.weather_effect_level_change()
             ponds_left = len(ponds) - i - 1
             remaining_capacity = pond.remaining_capacity()
             if allocated_fill < remaining_capacity:
@@ -373,29 +372,33 @@ class EvenDistributionStrategy(AllocationStrategy):
 
         if carry_over > 0:
             allocated_overflow = carry_over / len(ponds)
+            # TODO Capture overflow in records
 
 
 class FillFirstStrategy(AllocationStrategy):
     def allocate(
         self, volume: float, ponds: list[EvaporationPond], weather_data: WeatherData
     ) -> None:
-        for pond in ponds:
-            pond.level += self.weather_effect_level_change()
         sorted_ponds = sorted(
             ponds, key=methodcaller("remaining_capacity"), reverse=True
         )
         carry_over = 0
+        allocated_fill = volume
         for i, pond in enumerate(sorted_ponds):
+            pond.level += self.weather_effect_level_change()
             remaining_capacity = pond.remaining_capacity()
-            allocated_fill = volume
-            if volume < remaining_capacity:
+            allocated_fill -= carry_over
+            if allocated_fill <= remaining_capacity:
                 pond.volume += allocated_fill
-            elif volume >= remaining_capacity:
+                allocated_fill = 0
+                carry_over = 0
+            else:
                 carry_over = allocated_fill - remaining_capacity
                 pond.volume = pond.capacity
 
         if carry_over > 0:
-            allocated_overflow = carry_over / len(ponds)
+            allocated_overflow = carry_over
+            # TODO Capture overflow in records
 
 
 class PondAllocator:
@@ -425,11 +428,11 @@ if __name__ == "__main__":
     weather_data.set_evaporation_table("evaporation.csv", header=1)
     weather_data.set_rainfall_table("rainfall.csv", header=1)
 
-    south_pond = PlantPond(level=0.2)
-    north_pond = PlantPond(volume=1000)
-    east_pond = PlantPond(volume=1700)
+    south_pond = PlantPond(level=0.2, capacity=2000)
+    north_pond = PlantPond(volume=1000, capacity=2000)
+    east_pond = PlantPond(volume=1700, capacity=2000)
 
-    ponds = PondAllocator(EvenDistributionStrategy())
+    ponds = PondAllocator(FillFirstStrategy())
     ponds.set_weather_data(weather_data)
     ponds.add_pond(south_pond)
     ponds.add_pond(north_pond)
@@ -437,7 +440,7 @@ if __name__ == "__main__":
     time.progress_time()
 
     for _ in range(200):
-        ponds.distribute(0)
+        ponds.distribute(300)
         time.progress_time()
 
     records = [
