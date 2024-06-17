@@ -9,6 +9,7 @@ import calendar
 from datetime import date, timedelta, datetime
 from math import isclose
 from operator import methodcaller
+from itertools import cycle
 
 
 # https://library.dpird.wa.gov.au/cgi/viewcontent.cgi?article=1058&context=rmtr
@@ -376,12 +377,16 @@ class EvenDistributionStrategy(AllocationStrategy):
 
 
 class FillFirstStrategy(AllocationStrategy):
-    def allocate(
-        self, volume: float, ponds: list[EvaporationPond], weather_data: WeatherData
-    ) -> None:
-        sorted_ponds = sorted(
+    def __init__(
+        self,
+        ponds: list[EvaporationPond],
+    ):
+        self.sorted_ponds = sorted(
             ponds, key=methodcaller("remaining_capacity"), reverse=True
         )
+        self.pond = cycle(self.sorted_ponds)
+
+    def allocate(self, volume: float, weather_data: WeatherData) -> None:
         carry_over = 0
         allocated_fill = volume
         for i, pond in enumerate(sorted_ponds):
