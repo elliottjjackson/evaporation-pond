@@ -377,29 +377,30 @@ class EvenDistributionStrategy(AllocationStrategy):
 
 
 class FillFirstStrategy(AllocationStrategy):
-    def __init__(
-        self,
-        ponds: list[EvaporationPond],
-    ):
-        self.sorted_ponds = sorted(
-            ponds, key=methodcaller("remaining_capacity"), reverse=True
-        )
-        self.pond = cycle(self.sorted_ponds)
+    # FIXME Still not implemented correctly
+    sorted_ponds = None
+    active_pond = None
 
-    def allocate(self, volume: float, weather_data: WeatherData) -> None:
+    def allocate(
+        self, volume: float, ponds: list[EvaporationPond], weather_data: WeatherData
+    ) -> None:
+        if self.sorted_ponds == None and self.active_pond == None:
+            self.sorted_ponds = sorted(
+                ponds, key=methodcaller("remaining_capacity"), reverse=True
+            )
+            self.active_pond = cycle(self.sorted_ponds)
         carry_over = 0
         allocated_fill = volume
-        for i, pond in enumerate(sorted_ponds):
+        for pond in self.sorted_ponds:
             pond.level += self.weather_effect_level_change()
-            remaining_capacity = pond.remaining_capacity()
-            allocated_fill -= carry_over
-            if allocated_fill <= remaining_capacity:
-                pond.volume += allocated_fill
-                allocated_fill = 0
-                carry_over = 0
+            if pond is self.active_pond:
+                remaining_capacity = pond.remaining_capacity()
+                if allocated_fill <= remaining_capacity:
+                    pond.volume += allocated_fill
             else:
                 carry_over = allocated_fill - remaining_capacity
                 pond.volume = pond.capacity
+                next(self.active_pond)
 
         if carry_over > 0:
             allocated_overflow = carry_over
