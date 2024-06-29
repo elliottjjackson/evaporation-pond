@@ -378,13 +378,19 @@ class EvenDistributionStrategy(AllocationStrategy):
 
 class FillFirstStrategy(AllocationStrategy):
     # FIXME Still not implemented correctly
-    sorted_ponds = None
     active_pond = None
 
     def allocate(
         self, volume: float, ponds: list[EvaporationPond], weather_data: WeatherData
     ) -> None:
-        if self.sorted_ponds == None and self.active_pond == None:
+        # create a sorted list of ponds by capacity
+        # The pond with the largest capacity is the starting pond
+        # Fill first pond with allocated water
+        # If the pond is full, move on to the next pond
+        # Cycle through all the ponds
+        # If all ponds are full, submit the remaining allocation as overflow.   
+
+        if self.active_pond == None:
             self.sorted_ponds = sorted(
                 ponds, key=methodcaller("remaining_capacity"), reverse=True
             )
@@ -393,8 +399,8 @@ class FillFirstStrategy(AllocationStrategy):
         allocated_fill = volume
         for pond in self.sorted_ponds:
             pond.level += self.weather_effect_level_change()
+        remaining_capacity = pond.remaining_capacity()
             if pond is self.active_pond:
-                remaining_capacity = pond.remaining_capacity()
                 if allocated_fill <= remaining_capacity:
                     pond.volume += allocated_fill
             else:
