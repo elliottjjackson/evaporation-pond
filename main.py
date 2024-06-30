@@ -378,38 +378,64 @@ class EvenDistributionStrategy(AllocationStrategy):
 
 class FillFirstStrategy(AllocationStrategy):
     # FIXME Still not implemented correctly
-    active_pond = None
+    def __init__(self):
+        self.active_pond = None
+        self.inactive_ponds = None
+
+    def sort_inactive_ponds(self, ponds: list[EvaporationPond]):
+        self.inactive_ponds = sorted(
+            ponds, key=methodcaller("remaining_capacity"), reverse=True
+        )
+
+        if self.active_pond in self.inactive_ponds:
+            self.inactive_ponds.remove(self.active_pond)
+
+    def set_active_pond_to_highest_capacity(self, ponds: list[EvaporationPond]):
+        self.sort_inactive_ponds(ponds)
+        if self.active_pond == None:
+            highest_capacity_pond = self.inactive_ponds[0]
+        elif (
+            self.active_pond.remaining_capacity()
+            >= self.inactive_ponds[0].remaining_capacity()
+        ):
+            highest_capacity_pond = self.active_pond
+        else:
+            highest_capacity_pond = self.inactive_ponds[0]
+
+        self.active_pond = highest_capacity_pond
 
     def allocate(
         self, volume: float, ponds: list[EvaporationPond], weather_data: WeatherData
     ) -> None:
-        # create a sorted list of ponds by capacity
-        # The pond with the largest capacity is the starting pond
-        # Fill first pond with allocated water
-        # If the pond is full, move on to the next pond
-        # Cycle through all the ponds
-        # If all ponds are full, submit the remaining allocation as overflow.   
+        self.carry_over = 0
+
+        def _allocate_to_pond_logic(pond: EvaporationPond, allocated_fill: float):
+            remaining_capacity = pond.remaining_capacity()
+            if allocated_fill <= remaining_capacity:
+                pond.volume += allocated_fill
+                self.carry_over = 0
+            else:
+                self.carry_over = allocated_fill - remaining_capacity
+                pond.volume = pond.capacity
+
+        for pond in ponds:
+            pond.level += self.weather_effect_level_change()
 
         if self.active_pond == None:
-            self.sorted_ponds = sorted(
-                ponds, key=methodcaller("remaining_capacity"), reverse=True
-            )
-            self.active_pond = cycle(self.sorted_ponds)
-        carry_over = 0
-        allocated_fill = volume
-        for pond in self.sorted_ponds:
-            pond.level += self.weather_effect_level_change()
-        remaining_capacity = pond.remaining_capacity()
-            if pond is self.active_pond:
-                if allocated_fill <= remaining_capacity:
-                    pond.volume += allocated_fill
-            else:
-                carry_over = allocated_fill - remaining_capacity
-                pond.volume = pond.capacity
-                next(self.active_pond)
+            self.set_active_pond_to_highest_capacity(ponds)
 
-        if carry_over > 0:
-            allocated_overflow = carry_over
+        _allocate_to_pond_logic(self.active_pond, volume)
+
+        if self.carry_over > 0:
+            self.sort_inactive_ponds(ponds)
+            for pond in self.inactive_ponds:
+                self.acitve_pond = pond
+                _allocate_to_pond_logic(self.acitve_pond, volume)
+                if self.carry_over == 0:
+                    break
+
+        if self.carry_over > 0:
+            allocated_overflow = self.carry_over
             # TODO Capture overflow in records
 
 
