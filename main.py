@@ -429,8 +429,8 @@ class FillFirstStrategy(AllocationStrategy):
         if self.carry_over > 0:
             self.sort_inactive_ponds(ponds)
             for pond in self.inactive_ponds:
-                self.acitve_pond = pond
-                _allocate_to_pond_logic(self.acitve_pond, volume)
+                self.active_pond = pond
+                _allocate_to_pond_logic(self.active_pond, volume)
                 if self.carry_over == 0:
                     break
 
@@ -470,14 +470,14 @@ if __name__ == "__main__":
     north_pond = PlantPond(volume=1000, capacity=2000)
     east_pond = PlantPond(volume=1700, capacity=2000)
 
-    ponds = PondAllocator(FillFirstStrategy())
+    ponds = PondAllocator(EvenDistributionStrategy())
     ponds.set_weather_data(weather_data)
     ponds.add_pond(south_pond)
     ponds.add_pond(north_pond)
     ponds.add_pond(east_pond)
     time.progress_time()
 
-    for _ in range(200):
+    for _ in range(50):
         ponds.distribute(300)
         time.progress_time()
 
