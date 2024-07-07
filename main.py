@@ -38,7 +38,7 @@ class Evaporation:
         return rate
 
 
-# http://www.bom.gov.au/jsp/ncc/cdio/cvg/av?p_stn_num=008051&p_prim_element_index=18&p_display_type=statGraph&period_of_avg=ALL&normals_years=allYearOfData&staticPage=
+# http://www.bom.gov.au/jsp/ncc/cdio/cvg/av?p_stn_num=008051&p_prim_element_index=18\&p/_display_type=statGraph&period_of_avg=ALL&normals_years=allYearOfData&staticPage=
 @dataclass
 class Rainfall:
     def __init__(self):
@@ -293,6 +293,7 @@ class EvaporationPond(Mapping):
     @overflow.setter
     def overflow(self, value):
         self._overflow = value
+        self._update_record()
 
     @property
     def level(self):
@@ -489,7 +490,7 @@ if __name__ == "__main__":
     time.progress_time()
 
     for _ in range(50):
-        print(ponds.distribute(300))
+        ponds.distribute(300)
         time.progress_time()
 
     records = [
@@ -502,12 +503,18 @@ if __name__ == "__main__":
     plt.figure(figsize=(10, 5))  # Set the figure size
 
     # Loop through each dataset and plot
-    for i, data in enumerate(records):
-        timestamps = [entry["timestamp"] for entry in data]
-        volumes = [entry["volume"] for entry in data]
-
+    overflow_records = []
+    timestamps = []
+    for i, pond_record in enumerate(records):
+        # Entries in quotes will correspond to properties in EvaporationPond class.
+        timestamps = [entry["timestamp"] for entry in pond_record]
+        volumes = [entry["volume"] for entry in pond_record]
         names = ["North", "South", "East"]
         plt.plot(timestamps, volumes, marker="o", label=f"{names[i]} Pond")
+        overflow_records.append([entry["overflow"] for entry in pond_record])
+
+    overflow_total = [sum(values) for values in zip(*overflow_records)]
+    plt.plot(timestamps, overflow_total, marker="o", label=f"Overflow")
 
     # Formatting the plot
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
