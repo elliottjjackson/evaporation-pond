@@ -38,7 +38,7 @@ class Evaporation:
         return rate
 
 
-# http://www.bom.gov.au/jsp/ncc/cdio/cvg/av?p_stn_num=008051&p_prim_element_index=18&p_display_type=statGraph&period_of_avg=ALL&normals_years=allYearOfData&staticPage=
+# http://www.bom.gov.au/jsp/ncc/cdio/cvg/av?p_stn_num=008051&p_prim_element_index=18\&p/_display_type=statGraph&period_of_avg=ALL&normals_years=allYearOfData&staticPage=
 @dataclass
 class Rainfall:
     def __init__(self):
@@ -76,6 +76,8 @@ class WeatherData:
         )
         if self._valid_rate_table(evaporation_rate_table):
             self.evaporation.rate_table = evaporation_rate_table
+        else:
+            raise ValueError("Evaporation table not formatted with monthly data.")
 
     def set_rainfall_table(self, file_path: str, header: int = 0) -> None:
         rainfall_depth_table: dict[str:float] = self._get_weather_table(
@@ -83,6 +85,8 @@ class WeatherData:
         )
         if self._valid_rate_table(rainfall_depth_table):
             self.rainfall.depth_table = rainfall_depth_table
+        else:
+            raise ValueError("Rainfall table not formatted with monthly data.")
 
     def _get_weather_table(self, file_path: str, header: int = 0) -> dict[str:float]:
         evaporation_rate_table = {}
@@ -150,7 +154,7 @@ class TimeObject:
         self.timestep = self.timestepper()
         self.__initialised = True
 
-    # Generator that timesteps the date.
+    # Generator that timesteps the date by 1 month.
     def timestepper(self) -> Iterator[datetime]:
         while True:
             days_in_month = calendar.monthrange(
@@ -159,7 +163,6 @@ class TimeObject:
             self.current_time += timedelta(days=days_in_month)
             yield self.current_time
 
-    # Method to progress the TimeObject timestep by one unit using the generator.
     def progress_time(self) -> datetime:
         self.current_time = next(self.timestep)
         return self.current_time
@@ -298,6 +301,7 @@ class EvaporationPond(Mapping):
     @overflow.setter
     def overflow(self, value):
         self._overflow = value
+        self._update_record()
 
     @property
     def level(self):
@@ -352,14 +356,18 @@ class AllocationStrategy(ABC):
         return weather_data.rainfall.depth / 1000 - weather_data.evaporation.rate / 1000
 
     @abstractmethod
-    def allocate(self, volume: float, ponds: list[EvaporationPond]) -> None:
+    def allocate(
+        self, volume: float, ponds: list[EvaporationPond]
+    ) -> list[float, float]:
         pass
 
 
 class EvenDistributionStrategy(AllocationStrategy):
     def allocate(
         self, volume: float, ponds: list[EvaporationPond], weather_data: WeatherData
-    ) -> None:
+    ) -> list[float, float]:
+        # Ponds are filled from lowest capacity to highest so that overflowing ponds
+        # can distribute the overflow to higher capacity ponds.
         sorted_ponds = sorted(ponds, key=methodcaller("remaining_capacity"))
         allocated_fill = volume / len(ponds)
         carry_over = 0
@@ -369,6 +377,7 @@ class EvenDistributionStrategy(AllocationStrategy):
             remaining_capacity = pond.remaining_capacity()
             if allocated_fill < remaining_capacity:
                 pond.volume += allocated_fill
+                carry_over = 0
             elif ponds_left > 0:
                 carry_over = allocated_fill - remaining_capacity
                 allocated_fill = (
@@ -379,13 +388,14 @@ class EvenDistributionStrategy(AllocationStrategy):
                 carry_over = allocated_fill - remaining_capacity
                 pond.volume = pond.capacity
 
-        if carry_over > 0:
-            allocated_overflow = carry_over / len(ponds)
-            # TODO Capture overflow in records
+        allocated_overflow = carry_over / len(sorted_ponds)
+        for pond in sorted_ponds:
+            pond.overflow = allocated_overflow
+
+        return [volume - carry_over, carry_over]
 
 
 class FillFirstStrategy(AllocationStrategy):
-    # FIXME Still not implemented correctly
     def __init__(self):
         self.active_pond = None
         self.inactive_ponds = None
@@ -414,7 +424,7 @@ class FillFirstStrategy(AllocationStrategy):
 
     def allocate(
         self, volume: float, ponds: list[EvaporationPond], weather_data: WeatherData
-    ) -> None:
+    ) -> list[float, float]:
         self.carry_over = 0
 
         def _allocate_to_pond_logic(pond: EvaporationPond, allocated_fill: float):
@@ -442,9 +452,11 @@ class FillFirstStrategy(AllocationStrategy):
                 if self.carry_over == 0:
                     break
 
-        if self.carry_over > 0:
-            allocated_overflow = self.carry_over
-            # TODO Capture overflow in records
+        allocated_overflow = self.carry_over / len(ponds)
+        for pond in ponds:
+            pond.overflow = allocated_overflow
+
+        return [volume - self.carry_over, self.carry_over]
 
 
 class PondAllocator:
@@ -457,7 +469,7 @@ class PondAllocator:
         self.ponds.append(pond)
 
     def distribute(self, volume):
-        self.strategy.allocate(volume, self.ponds, self.weather_data)
+        return self.strategy.allocate(volume, self.ponds, self.weather_data)
 
     def set_strategy(self, strategy: AllocationStrategy):
         self.strategy = strategy
@@ -478,7 +490,7 @@ if __name__ == "__main__":
     north_pond = PlantPond(volume=1000, capacity=2000)
     east_pond = PlantPond(volume=1700, capacity=2000)
 
-    ponds = PondAllocator(EvenDistributionStrategy())
+    ponds = PondAllocator(FillFirstStrategy())
     ponds.set_weather_data(weather_data)
     ponds.add_pond(south_pond)
     ponds.add_pond(north_pond)
@@ -499,12 +511,18 @@ if __name__ == "__main__":
     plt.figure(figsize=(10, 5))  # Set the figure size
 
     # Loop through each dataset and plot
-    for i, data in enumerate(records):
-        timestamps = [entry["timestamp"] for entry in data]
-        xaxis = [entry["volume"] for entry in data]
-
+    overflow_records = []
+    timestamps = []
+    for i, pond_record in enumerate(records):
+        # Entries in quotes will correspond to properties in EvaporationPond class.
+        timestamps = [entry["timestamp"] for entry in pond_record]
+        volumes = [entry["volume"] for entry in pond_record]
         names = ["North", "South", "East"]
-        plt.plot(timestamps, xaxis, marker="o", label=f"{names[i]} Pond")
+        plt.plot(timestamps, volumes, marker="o", label=f"{names[i]} Pond")
+        overflow_records.append([entry["overflow"] for entry in pond_record])
+
+    overflow_total = [sum(values) for values in zip(*overflow_records)]
+    plt.plot(timestamps, overflow_total, marker="o", label=f"Overflow")
 
     # Formatting the plot
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
