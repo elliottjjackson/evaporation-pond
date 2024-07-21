@@ -209,6 +209,14 @@ class Timeseries:
         self.record[:]
 
 
+def load_pond_history_csv(filepath: str, header: int = 0) -> list[datetime, str]:
+    with open(filepath, "r") as file:
+        reader = csv.reader(file)
+        for _ in range(header):
+            next(reader)
+        return list(reader)
+
+
 @dataclass
 class EvaporationPond(Mapping):
     level: Optional[float] = None
@@ -493,10 +501,10 @@ if __name__ == "__main__":
     # Loop through each dataset and plot
     for i, data in enumerate(records):
         timestamps = [entry["timestamp"] for entry in data]
-        volumes = [entry["volume"] for entry in data]
+        xaxis = [entry["volume"] for entry in data]
 
         names = ["North", "South", "East"]
-        plt.plot(timestamps, volumes, marker="o", label=f"{names[i]} Pond")
+        plt.plot(timestamps, xaxis, marker="o", label=f"{names[i]} Pond")
 
     # Formatting the plot
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
@@ -505,7 +513,7 @@ if __name__ == "__main__":
 
     plt.title("Volume over Time")
     plt.xlabel("Timestamp")
-    plt.ylabel("Volume")
+    plt.ylabel("volume")
     plt.legend()  # Add a legend
     plt.grid(True)
     plt.tight_layout()
@@ -513,6 +521,7 @@ if __name__ == "__main__":
     # Show the plot
     plt.show()
 
+    print(load_pond_history_csv("history.csv"))
 
 #############################
 # TO BE IMPLEMENTED
