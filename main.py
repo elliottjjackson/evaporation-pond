@@ -540,34 +540,3 @@ if __name__ == "__main__":
     plt.show()
 
     print(load_pond_history_csv("history.csv"))
-
-#############################
-# TO BE IMPLEMENTED
-# Pond allocation strategies
-#############################
-# class Container:
-#     def __init__(self, capacity):
-#         self.capacity = capacity
-#         self.volume = 0
-
-#     def fill(self, volume):
-#         available_capacity = self.capacity - self.volume
-#         volume_to_add = min(available_capacity, volume)
-#         self.volume += volume_to_add
-#         return volume - volume_to_add
-# # Example usage:
-# containers = ContainerAllocator(EvenDistributionStrategy())
-# containers.add_container(100)
-# containers.add_container(150)
-# containers.add_container(200)
-
-# containers.distribute(120)  # Distribute 120 units using the chosen strategy
-
-# for i, container in enumerate(containers.containers):
-#     print(f"Container {i+1}: {container.volume}/{container.capacity}")
-
-# # Change strategy
-# containers.set_strategy(FillFirstStrategy())
-# containers.distribute(200)  # Distribute another 200 units using a different strategy
-# for i, container in enumerate(containers.containers):
-#     print(f"Container {i+1}: {container.volume}/{container.capacity}")
