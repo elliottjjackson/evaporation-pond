@@ -140,7 +140,7 @@ class TimeObject:
     _instance = None
 
     # Singleton: ensures only one instance of this class is created.
-    def __new__(cls):
+    def __new__(cls, *kwargs):
         if cls._instance is None:
             cls._instance = super(TimeObject, cls).__new__(cls)
             cls._instance.__initialised = False
@@ -183,7 +183,6 @@ def get_current_month() -> str:
 @dataclass
 class Timeseries:
     record: list[dict[str : Optional[float]]] = field(default_factory=list)
-    time_obj = TimeObject()
 
     def __repr__(self) -> str:
         number = len(self.record)
@@ -480,7 +479,7 @@ class PondAllocator:
 
 if __name__ == "__main__":
 
-    time = TimeObject()
+    time = TimeObject(date(2025, 1, 1))
 
     weather_data = WeatherData()
     weather_data.set_evaporation_table("evaporation.csv", header=1)
